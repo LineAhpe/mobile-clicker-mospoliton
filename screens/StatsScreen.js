@@ -1,6 +1,6 @@
 // screens/StatsScreen.js
 // Экран со статистикой игрока и аватаркой, которую
-// можно выбрать из галереи устройства.
+// можно выбрать из галереи устройства. Показывает активный и пассивный доход.
 
 import React from 'react';
 import {
@@ -12,31 +12,34 @@ import {
   Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { COLORS } from '../theme';
 
 /**
  * Экран "Статистика".
  *
  * Пропсы:
- * - coins          — текущий баланс монет
- * - coinsPerClick  — текущий доход за клик
- * - totalClicks    — сколько кликов сделал игрок
- * - totalEarned    — сколько всего монет заработано
- * - avatarUri      — URI текущей аватарки (или null)
- * - onChangeAvatar — функция, вызываемая при выборе новой аватарки
+ * - coins                  — текущий баланс монет
+ * - coinsPerClick          — текущий доход за клик
+ * - totalClicks            — сколько кликов сделал игрок
+ * - totalEarned            — сколько всего монет заработано
+ * - passiveIncomePerMinute — пассивный доход (монет в минуту)
+ * - avatarUri              — URI текущей аватарки (или null)
+ * - onChangeAvatar         — функция, вызываемая при выборе новой аватарки
  */
 export default function StatsScreen({
   coins,
   coinsPerClick,
   totalClicks,
   totalEarned,
+  passiveIncomePerMinute,
   avatarUri,
   onChangeAvatar,
 }) {
   // Обработчик выбора аватарки из галереи
   const handlePickAvatar = async () => {
     try {
-      // Запрашиваем разрешение на доступ к медиатеке
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== 'granted') {
         Alert.alert(
@@ -46,11 +49,10 @@ export default function StatsScreen({
         return;
       }
 
-      // Открываем галерею
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1], // квадратная обрезка
+        aspect: [1, 1],
         quality: 0.8,
       });
 
@@ -60,8 +62,6 @@ export default function StatsScreen({
 
       if (result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
-        // Передаём выбранный URI наверх (в App),
-        // он сохранится в состоянии и в AsyncStorage
         onChangeAvatar(uri);
       }
     } catch (error) {
@@ -103,6 +103,13 @@ export default function StatsScreen({
       </View>
 
       <View style={styles.statRow}>
+        <Text style={styles.statLabel}>Пассивный доход (офлайн):</Text>
+        <Text style={styles.statValue}>
+          {passiveIncomePerMinute} монет/мин
+        </Text>
+      </View>
+
+      <View style={styles.statRow}>
         <Text style={styles.statLabel}>Всего кликов:</Text>
         <Text style={styles.statValue}>{totalClicks}</Text>
       </View>
@@ -113,8 +120,9 @@ export default function StatsScreen({
       </View>
 
       <Text style={styles.hint}>
-        Аватарка и статистика сохраняются между перезапусками приложения
-        благодаря локальному хранилищу.
+        Аватарка, статистика и параметры дохода сохраняются между перезапусками
+        приложения благодаря локальному хранилищу. Пассивный доход в онлайне, и офлайн
+        только за первые 3 часа офлайна.
       </Text>
     </View>
   );
@@ -123,7 +131,7 @@ export default function StatsScreen({
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#f4f4f4',
+    backgroundColor: COLORS.background,
     paddingHorizontal: 16,
     paddingVertical: 24,
   },
@@ -132,6 +140,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 16,
     textAlign: 'center',
+    color: COLORS.textPrimary,
   },
   avatarSection: {
     alignItems: 'center',
@@ -141,14 +150,16 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#ddd',
+    backgroundColor: COLORS.card,
+    borderWidth: 2,
+    borderColor: COLORS.borderSubtle,
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholderText: {
-    color: '#555',
+    color: COLORS.textMuted,
     fontSize: 12,
   },
   avatarButton: {
@@ -156,10 +167,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: '#4caf50',
+    backgroundColor: COLORS.accent,
   },
   avatarButtonText: {
-    color: '#fff',
+    color: COLORS.textPrimary,
     fontWeight: '600',
   },
   statRow: {
@@ -170,15 +181,17 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 16,
+    color: COLORS.textSecondary,
   },
   statValue: {
     fontSize: 16,
     fontWeight: '600',
+    color: COLORS.primarySoft,
   },
   hint: {
     marginTop: 24,
     fontSize: 14,
     textAlign: 'center',
-    color: '#555',
+    color: COLORS.textMuted,
   },
 });
