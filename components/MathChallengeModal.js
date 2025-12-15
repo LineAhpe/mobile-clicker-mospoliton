@@ -119,7 +119,7 @@ export default function MathChallengeModal({ visible, mode, onCancel, onResult }
 
           <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={onCancel}>
-              <Text style={styles.btnTextGhost}>Отмена</Text>
+              <Text style={styles.btnTextGhost}>Выйти (минус монеты)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submit}>
@@ -128,7 +128,7 @@ export default function MathChallengeModal({ visible, mode, onCancel, onResult }
           </View>
 
           <Text style={styles.hint}>
-            Если ответ неверный — улучшение не выдаётся, но монеты списываются.
+            Если ответ неверный или вы выйдете — улучшение не выдаётся, но монеты списываются.
           </Text>
         </KeyboardAvoidingView>
       </View>

@@ -1,19 +1,15 @@
 // components/MinesweeperModal.js
-// Мини-сапёр: 6x6, 5 мин.
-// Управление: режим "Открыть" / "Флаг".
-// Успех = открыть все безопасные клетки. Провал = открыть мину.
-//
-// ВАЖНО: мины расставляются только после первого открытия клетки.
-// Первая открытая клетка и её окружение 3x3 гарантированно без мин,
-// поэтому первое открытие всегда раскрывает несколько клеток.
+// Мини-сапёр: 6x6, 6 мин.
+// Управление: режим "Открыть" / "Флаг" (кнопка сверху).
+// Успех = открыть все не-минные клетки. Провал = открыть мину.
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { COLORS } from '../theme';
 
 const ROWS = 6;
 const COLS = 6;
-const MINES = 5;
+const MINES = 6;
 
 function idx(r, c) {
   return r * COLS + c;
@@ -36,23 +32,27 @@ function neighbors(r, c) {
   return res;
 }
 
-function makeEmptyBoard() {
-  return Array.from({ length: ROWS * COLS }, () => ({
+function makeBoard() {
+  const cells = Array.from({ length: ROWS * COLS }, () => ({
     isMine: false,
     revealed: false,
     flagged: false,
     adj: 0,
   }));
-}
 
-function computeAdj(cells) {
+  // ставим мины
+  const used = new Set();
+  while (used.size < MINES) {
+    const p = Math.floor(Math.random() * cells.length);
+    used.add(p);
+  }
+  for (const p of used) cells[p].isMine = true;
+
+  // считаем числа
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const i = idx(r, c);
-      if (cells[i].isMine) {
-        cells[i].adj = 0;
-        continue;
-      }
+      if (cells[i].isMine) continue;
       let count = 0;
       for (const [nr, nc] of neighbors(r, c)) {
         if (cells[idx(nr, nc)].isMine) count++;
@@ -60,57 +60,20 @@ function computeAdj(cells) {
       cells[i].adj = count;
     }
   }
-}
 
-function safeZoneSet(centerR, centerC) {
-  const set = new Set();
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      const r = centerR + dr;
-      const c = centerC + dc;
-      if (inBounds(r, c)) set.add(idx(r, c));
-    }
-  }
-  return set;
-}
-
-function generateBoardAfterFirstReveal(prevCells, firstR, firstC) {
-  // Сохраняем флаги, но сбрасываем мины/числа/открытие.
-  const cells = prevCells.map((x) => ({
-    ...x,
-    isMine: false,
-    revealed: false,
-    adj: 0,
-  }));
-
-  const safe = safeZoneSet(firstR, firstC);
-
-  // Ставим мины вне safe-зоны.
-  const used = new Set();
-  const total = ROWS * COLS;
-  while (used.size < MINES) {
-    const p = Math.floor(Math.random() * total);
-    if (safe.has(p)) continue;
-    used.add(p);
-  }
-  for (const p of used) cells[p].isMine = true;
-
-  computeAdj(cells);
   return cells;
 }
 
 export default function MinesweeperModal({ visible, onCancel, onResult }) {
-  const [cells, setCells] = useState(makeEmptyBoard());
+  const [cells, setCells] = useState(makeBoard());
   const [mode, setMode] = useState('reveal'); // reveal | flag
   const [finished, setFinished] = useState(false);
-  const generatedRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
-    setCells(makeEmptyBoard());
+    setCells(makeBoard());
     setMode('reveal');
     setFinished(false);
-    generatedRef.current = false;
   }, [visible]);
 
   const revealedSafeCount = useMemo(() => {
@@ -157,9 +120,9 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
     if (finished) return;
 
     setCells((prev) => {
-      let next = prev.map((x) => ({ ...x }));
+      const next = prev.map((x) => ({ ...x }));
       const i = idx(r, c);
-      let cell = next[i];
+      const cell = next[i];
 
       if (cell.revealed) return prev;
 
@@ -170,13 +133,6 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
 
       // mode === 'reveal'
       if (cell.flagged) return prev;
-
-      // Генерация мин после первого открытия (и safe-зона 3x3)
-      if (!generatedRef.current) {
-        next = generateBoardAfterFirstReveal(next, r, c);
-        generatedRef.current = true;
-        cell = next[i];
-      }
 
       if (cell.isMine) {
         // проигрыш: показываем мины
@@ -189,9 +145,11 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
         return next;
       }
 
-      // Всегда используем flood: для чисел откроется только сама клетка,
-      // для 0 откроется область.
-      revealFlood(r, c, next);
+      if (cell.adj === 0) {
+        revealFlood(r, c, next);
+      } else {
+        cell.revealed = true;
+      }
 
       return next;
     });
@@ -204,6 +162,7 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
           <Text style={styles.title}>Мини-игра: Сапёр</Text>
           <Text style={styles.hint}>
             Условие успеха — открыть все безопасные клетки. Взрыв на мине = провал.
+Выход из мини-игры = провал (монеты списываются).
           </Text>
 
           <View style={styles.topRow}>
@@ -233,41 +192,39 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
 
           <ScrollView contentContainerStyle={{ alignItems: 'center' }}>
             <View style={styles.grid}>
-              {Array.from({ length: ROWS }).map((_, r) => (
-                <View key={`row-${r}`} style={styles.row}>
-                  {Array.from({ length: COLS }).map((__, c) => {
-                    const i = idx(r, c);
-                    const cell = cells[i];
+              {Array.from({ length: ROWS }).map((_, r) =>
+                Array.from({ length: COLS }).map((__, c) => {
+                  const i = idx(r, c);
+                  const cell = cells[i];
 
-                    let text = '';
-                    if (cell.revealed) {
-                      if (cell.isMine) text = '💣';
-                      else if (cell.adj > 0) text = String(cell.adj);
-                    } else if (cell.flagged) {
-                      text = '🚩';
-                    }
+                  let text = '';
+                  if (cell.revealed) {
+                    if (cell.isMine) text = '💣';
+                    else if (cell.adj > 0) text = String(cell.adj);
+                  } else if (cell.flagged) {
+                    text = '🚩';
+                  }
 
-                    return (
-                      <TouchableOpacity
-                        key={`${r}-${c}`}
-                        style={[
-                          styles.cell,
-                          cell.revealed ? styles.cellRevealed : styles.cellHidden,
-                        ]}
-                        onPress={() => pressCell(r, c)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.cellText}>{text}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ))}
+                  return (
+                    <TouchableOpacity
+                      key={`${r}-${c}`}
+                      style={[
+                        styles.cell,
+                        cell.revealed ? styles.cellRevealed : styles.cellHidden,
+                      ]}
+                      onPress={() => pressCell(r, c)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.cellText}>{text}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
           </ScrollView>
 
           <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={onCancel}>
-            <Text style={styles.btnTextGhost}>Отмена</Text>
+            <Text style={styles.btnTextGhost}>Выйти (минус монеты)</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -276,6 +233,7 @@ export default function MinesweeperModal({ visible, onCancel, onResult }) {
 }
 
 const CELL = 28;
+const CELL_INNER = CELL - 1;
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -313,24 +271,29 @@ const styles = StyleSheet.create({
   counter: { color: COLORS.textSecondary, fontWeight: '700' },
 
   grid: {
-    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: COLS * CELL,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     borderRadius: 10,
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row' },
   cell: {
-    width: CELL,
-    height: CELL,
+    width: CELL_INNER,
+    height: CELL_INNER,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0.5,
     borderColor: COLORS.borderSubtle,
   },
-  // заметно отличаем открытую клетку от закрытой
-  cellHidden: { backgroundColor: COLORS.backgroundAlt },
-  cellRevealed: { backgroundColor: COLORS.card },
+  // Закрытая клетка – темнее, открытая – заметно светлее, но не белая
+  cellHidden: {
+    backgroundColor: COLORS.backgroundAlt,
+  },
+  cellRevealed: {
+    backgroundColor: '#4B5563',
+  },
   cellText: { fontSize: 12, fontWeight: '800', color: COLORS.textPrimary },
 
   btn: { paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginTop: 10 },

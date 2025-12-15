@@ -4,7 +4,7 @@
 // звуки, аватарка, и мини-игры для прокачки.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator, Image, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, Image, StyleSheet, Alert, Platform, ActionSheetIOS } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 // Навигация
@@ -53,6 +53,9 @@ export default function App() {
   // Очередь мини-игр (чередование)
   const [nextClickMiniGame, setNextClickMiniGame] = useState('equation'); // equation <-> ttt
   const [nextPassiveMiniGame, setNextPassiveMiniGame] = useState('example'); // example <-> mines
+
+  // Не показывать предупреждение перед мини-игрой (если пользователь выбрал "Больше не спрашивать")
+  const [skipUpgradeConfirm, setSkipUpgradeConfirm] = useState(false);
 
   // Модалки мини-игр
   const [pendingUpgrade, setPendingUpgrade] = useState(null);
@@ -147,6 +150,7 @@ export default function App() {
             // очередь мини-игр (чтобы после перезапуска чередование сохранялось)
             setNextClickMiniGame(parsed.nextClickMiniGame ?? 'equation');
             setNextPassiveMiniGame(parsed.nextPassiveMiniGame ?? 'example');
+            setSkipUpgradeConfirm(parsed.skipUpgradeConfirm ?? false);
           }
         }
       } catch (error) {
@@ -177,6 +181,7 @@ export default function App() {
           // очередь мини-игр
           nextClickMiniGame,
           nextPassiveMiniGame,
+          skipUpgradeConfirm,
 
           // время последней активности — для офлайн-дохода
           lastActiveAt: new Date().toISOString(),
@@ -200,6 +205,7 @@ export default function App() {
     passiveBuffer,
     nextClickMiniGame,
     nextPassiveMiniGame,
+    skipUpgradeConfirm,
   ]);
 
   // -------- Загрузка звуков --------
@@ -312,13 +318,56 @@ export default function App() {
     }
   };
 
-  const handleRequestUpgrade = (payload) => {
+  // Результат мини-игры: списываем монеты всегда, прокачку даём только при успехе
+  
+  // --- Платформенное подтверждение перед запуском мини-игры ---
+  // Android: Alert, iOS: ActionSheetIOS.
+  // Вариант "Согласен и больше не спрашивать" сохраняет настройку.
+  const startUpgradeWithConfirm = (payload) => {
     if (!payload) return;
-    requestUpgrade(payload.type, payload.cost, payload.bonus);
+
+    const { type, cost, bonus } = payload;
+
+    if (skipUpgradeConfirm) {
+      requestUpgrade(type, cost, bonus);
+      return;
+    }
+
+    const title = 'Подтверждение прокачки';
+    const message =
+      'Сейчас начнётся мини-игра. Выйти без последствий нельзя.\n\n' +
+      'Если закрыть мини-игру (кнопка назад / выйти) — попытка считается проигранной: ' +
+      'монеты спишутся, улучшение не выдаётся.\n\nПродолжить?';
+
+    const agree = () => requestUpgrade(type, cost, bonus);
+    const agreeNoAsk = () => {
+      setSkipUpgradeConfirm(true);
+      requestUpgrade(type, cost, bonus);
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title,
+          message,
+          options: ['Отмена', 'Согласен', 'Согласен и больше не спрашивать'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) agree();
+          if (buttonIndex === 2) agreeNoAsk();
+        }
+      );
+    } else {
+      Alert.alert(title, message, [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Согласен', onPress: agree },
+        { text: 'Согласен и больше не спрашивать', onPress: agreeNoAsk },
+      ]);
+    }
   };
 
-  // Результат мини-игры: списываем монеты всегда, прокачку даём только при успехе
-  const finishMiniGame = (success) => {
+const finishMiniGame = (success) => {
     const pu = pendingUpgrade;
     if (!pu) {
       setActiveMiniGame(null);
@@ -352,9 +401,8 @@ export default function App() {
   };
 
   const cancelMiniGame = () => {
-    // Отмена = не покупаем улучшение, ничего не списываем
-    setPendingUpgrade(null);
-    setActiveMiniGame(null);
+    // Выход из мини-игры считается провалом: монеты списываются, улучшение не выдаётся.
+    finishMiniGame(false);
   };
 
   const mathMode = useMemo(() => {
@@ -434,7 +482,7 @@ export default function App() {
                 coins={coins}
                 coinsPerClick={coinsPerClick}
                 passiveIncomePerMinute={passiveIncomePerMinute}
-                onRequestUpgrade={handleRequestUpgrade}
+                onRequestUpgrade={startUpgradeWithConfirm}
               />
             )}
           </Tab.Screen>

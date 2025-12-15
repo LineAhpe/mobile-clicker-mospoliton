@@ -120,6 +120,7 @@ export default function TicTacToeModal({ visible, onCancel, onResult }) {
           <Text style={styles.title}>Мини-игра: Крестики-нолики</Text>
           <Text style={styles.hint}>
             Условие успеха — сыграть в ничью. Ты ходишь первым (X), компьютер (O) играет идеально.
+Выход из мини-игры = провал (монеты списываются).
           </Text>
 
           <View style={styles.grid}>
@@ -136,7 +137,7 @@ export default function TicTacToeModal({ visible, onCancel, onResult }) {
           </View>
 
           <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={onCancel}>
-            <Text style={styles.btnTextGhost}>Отмена</Text>
+            <Text style={styles.btnTextGhost}>Выйти (минус монеты)</Text>
           </TouchableOpacity>
         </View>
       </View>
